@@ -1,0 +1,23 @@
+{
+  "name": "phoenix-liveview-frontintech",
+  "version": "0.1.0",
+  "description": "Apresentação, código fonte e projeto de exemplo da apresentação \"Phoenix LiveView: simplficando o frontend com Elixir\" ministrada no evento FrontinTech SP 2024",
+  "main": "null",
+  "scripts": {
+    "test": "null"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zoedsoupe/frontintech-phoenix-liveview.git"
+  },
+  "author": "zoedsoupe",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zoedsoupe/frontintech-phoenix-liveview/issues"
+  },
+  "homepage": "https://github.com/zoedsoupe/frontintech-phoenix-liveview#readme",
+  "dependencies": {
+    "@slidev/cli": "^0.49.29",
+    "@slidev/theme-default": "^0.25.0"
+  }
+}
