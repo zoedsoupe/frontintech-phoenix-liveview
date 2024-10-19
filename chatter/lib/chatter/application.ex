@@ -9,7 +9,9 @@ defmodule Chatter.Application do
   def start(_type, _args) do
     children = [
       {Phoenix.PubSub, name: Chatter.PubSub},
-      ChatterWeb.Endpoint
+      ChatterWeb.Endpoint,
+      Chatter.UsernameStore,
+      Chatter.ChatHistory
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

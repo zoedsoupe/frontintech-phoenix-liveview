@@ -6,6 +6,11 @@ defmodule ChatterWeb.ChatLive do
   alias Phoenix.PubSub
   alias Earmark
 
+  alias Chatter.ChatHistory
+  alias Chatter.UsernameStore
+
+  require Logger
+
   @topic "chat_room"
 
   def mount(_params, _session, socket) do
@@ -13,7 +18,7 @@ defmodule ChatterWeb.ChatLive do
 
     {:ok,
      assign(socket,
-       messages: [],
+       messages: ChatHistory.get_messages(),
        new_message: "",
        username: nil,
        show_username_modal: true
@@ -21,37 +26,23 @@ defmodule ChatterWeb.ChatLive do
   end
 
   def handle_event("set_username", %{"username" => username}, socket) do
-    sanitized_username = String.trim(username)
+    sanitized_username = sanitize_username(username)
 
-    if sanitized_username == "" do
-      {:noreply,
-       socket
-       |> put_flash(:error, "Nome de usuário não pode estar vazio.")
-       |> assign(:show_username_modal, true)}
-    else
+    with :ok <- UsernameStore.validate_username_duplication(sanitized_username),
+         :ok <- UsernameStore.register_username(username) do
       # Broadcast uma mensagem de admin informando a entrada do novo usuário
-      admin_message = %{
-        id: generate_random_id(),
-        user: "Admin",
-        content: Earmark.as_html!("**#{sanitized_username} entrou no chat!**")
-      }
-
-      PubSub.broadcast(Chatter.PubSub, @topic, {:new_message, admin_message})
+      publish_admin_message("**#{sanitized_username}** entrou no chat!")
 
       {:noreply, assign(socket, username: sanitized_username, show_username_modal: false)}
+    else
+      error -> handle_username_registration_error(error, socket)
     end
   end
 
   def handle_event("send_message", %{"message" => message}, socket) do
-    sanitized_message = Earmark.as_html!(message)
+    username = socket.assigns.username
 
-    msg = %{
-      id: generate_random_id(),
-      user: socket.assigns.username,
-      content: sanitized_message
-    }
-
-    PubSub.broadcast(Chatter.PubSub, @topic, {:new_message, msg})
+    publish_message(username, message)
 
     {:noreply, assign(socket, new_message: "")}
   end
@@ -77,8 +68,8 @@ defmodule ChatterWeb.ChatLive do
               />
               <button type="submit">Entrar</button>
             </form>
-            <%= if @flash[:error] do %>
-              <p class="error"><%= @flash[:error] %></p>
+            <%= if message = @flash["error"] do %>
+              <p class="error"><%= message %></p>
             <% end %>
           </div>
         </div>
@@ -94,11 +85,71 @@ defmodule ChatterWeb.ChatLive do
       </div>
       <!-- Formulário de envio de mensagens -->
       <form id="form" phx-submit="send_message" class="message-form" phx-hook="MessageForm">
-        <textarea name="message" placeholder="Digite sua mensagem..." autocomplete="off" rows="1"></textarea>
+        <textarea
+          name="message"
+          placeholder="Digite sua mensagem..."
+          autocomplete="off"
+          rows="1"
+          autofocus
+        ></textarea>
         <button type="submit">Enviar</button>
       </form>
     </div>
     """
+  end
+
+  def terminate(_reason, socket) do
+    if username = socket.assigns.username do
+      UsernameStore.unregister_username(username)
+      publish_admin_message("**#{username}** saiu do chat.")
+    else
+      :ok
+    end
+  end
+
+  defp publish_admin_message(content), do: publish_message("Admin", content)
+
+  defp publish_message(username, content) do
+    message_id = generate_random_id()
+    content = as_sanitized_html!(content)
+    message = %{id: message_id, user: username, content: content}
+
+    ChatHistory.add_message(message)
+    PubSub.broadcast(Chatter.PubSub, @topic, {:new_message, message})
+  end
+
+  defp handle_username_registration_error({:error, :duplicate_username}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:error, "Nome de usuário já está em uso :(")
+     |> assign(:show_username_modal, true)}
+  end
+
+  defp handle_username_registration_error({:error, :empty_username}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:error, "Nome de usuário não pode estar vazio.")
+     |> assign(:show_username_modal, true)}
+  end
+
+  defp handle_username_registration_error(err, socket) do
+    Logger.error("[#{__MODULE__}] => Unhandled error on username registration: #{inspect(err)}")
+
+    {:noreply,
+     socket
+     |> put_flash(:error, "Aconteceu um erro interno... :/")
+     |> assign(:show_username_modal, true)}
+  end
+
+  defp sanitize_username(username) when is_binary(username) do
+    username
+    |> String.trim()
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+  end
+
+  defp as_sanitized_html!(content) when is_binary(content) do
+    Earmark.as_html!(content, escape: true)
   end
 
   @doc """

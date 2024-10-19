@@ -53,7 +53,7 @@ RUN mix release
 FROM ${RUNNER_IMAGE} AS runner
 
 RUN apk update --no-cache
-RUN apk add --no-cache tzdata openssl ncurses
+RUN apk add --no-cache tzdata openssl ncurses libstdc++
 
 ARG MIX_ENV
 
